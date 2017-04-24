@@ -9,6 +9,7 @@ import time
 import configparser
 import json
 from cassiopeia import baseriotapi
+from cassiopeia.type.api import exception
 
 
 class User:
@@ -99,7 +100,7 @@ def get_user_mastery_scores(key, userData, champId):
                         int(userId),
                         champId
                     ).championPoints
-            except APIError:
+            except exception.APIError:
                 print(
                     'Unable to get user mastery for {0}'.format(username),
                     file=sys.stderr
