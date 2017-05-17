@@ -97,8 +97,10 @@ def main():
         with open(userDataFilePath) as userDataFile:
             userData = json.load(userDataFile)
 
+        libchampmastery.set_key(key)
+
         if sys.argv[2] == 'add':
-            userData = libchampmastery.add_user(key, userData, sys.argv[3], sys.argv[4:])
+            userData = libchampmastery.add_users(userData, sys.argv[3], sys.argv[4:])
 
             with open(userDataFilePath, 'w') as userDataFile:
                 json.dump(userData, userDataFile, sort_keys=True, indent=4)
@@ -120,7 +122,15 @@ def main():
                     outputFile.write(format_as_reddit_table(users))
 
         elif sys.argv[2] == 'upd':
-            userData = libchampmastery.update_user_mastery(key, userData, champId)
+            if len(sys.argv) == 3:
+                userData = libchampmastery.update_all_users(userData, champId)
+
+            elif len(sys.argv) > 3:
+                userData = libchampmastery.update_region(userData, sys.argv[3], champId)
+
+            elif len(sys.argv) > 4:
+                userData = libchampmastery.update_single_user(userData, sys.argv[3], sys.argv[4], champId)
+
             with open(userDataFilePath, 'w') as userDataFile:
                 json.dump(userData, userDataFile, sort_keys=True, indent=4)
 

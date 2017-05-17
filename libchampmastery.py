@@ -8,11 +8,26 @@ from cassiopeia import baseriotapi
 from cassiopeia.type.api import exception
 
 
-def add_user(key, userData, region, newUsers):
-    """Adds user data from the api to a dict."""
+def set_key(newKey):
+    """Set the key to use for the Riot API."""
+    set_key.key = newKey
+    return
+
+
+def add_users(userData, region, newUsers):
+    """Add user data from the API to a dict.
+
+    Args:
+        userData (dict): The dictionary to work with.
+        region (string): The region to work with.
+        newUsers (list<string>): A list of up to 40 names to look up.
+
+    Returns:
+        dict: The original dict with additional users.
+    """
     # Raise ValueError if there are more than 40 names to look up
     if len(newUsers) > 40:
-        raise ValueError('Only able to handle 40 users at a time')
+        raise ValueError('More than 40 usernames passed to add_users()')
 
     # Pre-process arguments
     region = region.lower()
@@ -21,7 +36,7 @@ def add_user(key, userData, region, newUsers):
         newUsers[newUsers.index(username)] = username.lower()
 
     # Set up baseriotapi
-    baseriotapi.set_api_key(key)
+    baseriotapi.set_api_key(set_key.key)
     baseriotapi.set_region(region)
 
     # Get user data
@@ -31,53 +46,134 @@ def add_user(key, userData, region, newUsers):
     if region not in userData:
         userData[region] = dict()
 
-    # Iterate over fetched data, filling in information and defaults
+    # Check for missing entries
     for username in newUsers:
-        try:
-            userData[region][fetchedUserData[username].id] = {
-                'name': fetchedUserData[username].name,
-                'mastery': 0,
-            }
+        if username not in fetchedUserData:
+            print(
+                'Unable to fetch data for {0} {1}'.format(region, username),
+                file=sys.stderr
+            )
 
+    # Make sure there's something in the dict
+    if len(fetchedUserData) == 0:
+        print('No data fetched, returning', file=sys.stderr)
+        return userData
+
+    # Iterate over fetched data, filling in information and defaults
+    for userKey, userInfo in fetchedUserData.items():
+        userData[region][userInfo.name.lower().replace(' ','')] = {
+            'id': userInfo.id,
+            'mastery': 0,
+            'name': userInfo.name,
+        }
+
+    return userData
+
+
+def rem_users(userData, region, rmUsers):
+    """Remove user data by usernames."""
+    region = region.lower()
+
+    for username in rmUsers:
+        rmUsers[rmUsers.index(username)] = username.lower().replace(' ','')
+
+    for username in rmUsers:
+        try:
+            del userData[region][username]
         except KeyError:
             print(
-                'Unable to add data for {0}'.format(username),
+                'Could not find {0} to be deleted'.format(username),
                 file=sys.stderr
             )
 
     return userData
 
 
-def rem_user(userData, region, rmUsers):
-    """Removes user data based on usernames."""
-    region = region.lower()
+def update_single_user(userData, region, username, champId):
+    """Update a single user's mastery score.
 
-    for username in rmUsers:
-        rmUsers[rmUsers.index(username)] = username.lower()
+    Args:
+        userData (dict): The user data to work with.
+        region (string): The user's region.
+        username (string): The username to look up.
+        champId (ing): The champion for which to get mastery points.
 
-    for userId, userInfo in userData.items():
-        if userInfo['name'].lower() in rmUsers:
-            del userData[region][userId]
+    Returns:
+        dict: The original dict with the updated mastery score."""
+    username = username.lower().replace(' ','')
+
+    # Set up baseriotapi
+    baseriotapi.set_api_key(set_key.key)
+    baseriotapi.set_region(region)
+
+    try:
+        mastery = baseriotapi.get_champion_mastery(
+            int(userData[region][username]['id']),
+            champId
+        ).championPoints
+        userData[region][username]['mastery'] = mastery
+    except KeyError:
+        print(
+            'Could not find {0} to be updated'.format(username),
+            file=sys.stderr
+        )
 
     return userData
 
 
-def update_user_mastery(key, userData, champId):
-    """Takes a riot api key and a json of user information and
-        returns a list<User>.
+def update_region(userData, region, champId):
+    """Update the mastery points of every user in one region.
+
+    Args:
+        userData (dict): The user data to work with.
+        region (string): The region to update.
+        champId (int): The champion for which to get mastery points.
+
+    Returns:
+        dict: The original dict with updated mastery scores.
+    """
+    # Set up baseriotapi
+    baseriotapi.set_api_key(set_key.key)
+    baseriotapi.set_region(region)
+
+    # Iterate over users in a region
+    for username, userInfo in userData[region].items():
+        try:
+            userInfo['mastery'] = baseriotapi.get_champion_mastery(
+                int(userInfo['id']),
+                champId
+            ).championPoints
+        except exception.APIError:
+            print(
+                'Unable to get user mastery for {0} {1}'.format(region, username),
+                file=sys.stderr
+            )
+
+    return userData
+
+
+def update_all_users(userData, champId):
+    """Update the mastery points of every user in a dict.
+
+    Args:
+        userData (dict): The user data to iterate over.
+        champId (int): The champion for which to get mastery points.
+
+    Returns:
+        dict: The original dict with updated mastery scores.
     """
     # Set key
-    baseriotapi.set_api_key(key)
+    baseriotapi.set_api_key(set_key.key)
 
     # Iterate over regions in user data
     for region in userData:
         baseriotapi.set_region(region)
 
         # Iterate over user IDs in region data
-        for userId, userInfo in userData[region].items():
+        for username, userInfo in userData[region].items():
             try:
                 userInfo['mastery'] = baseriotapi.get_champion_mastery(
-                    int(userId),
+                    int(userInfo['id']),
                     champId
                 ).championPoints
             except exception.APIError:
@@ -90,13 +186,22 @@ def update_user_mastery(key, userData, champId):
 
 
 def sort_users(userData):
-    """Takes a dict and returns a sorted list of dict items."""
+    """Sorts the users from a dict into an ordered list.
+
+    Args:
+        userData (dict): The user data to work with.
+
+    Returns:
+        list<dict>: The user data sorted into a list of dict objects.
+    """
     users = []
 
+    # Iterate over regions
     for region, regionUsers in userData.items():
-        for userId, userInfo in regionUsers.items():
+        # Iterate over users in the region
+        for username, userInfo in regionUsers.items():
             userDict = {
-                'id': userId,
+                'id': userInfo['id'],
                 'region': region,
                 'name': userInfo['name'],
                 'mastery': userInfo['mastery'],
