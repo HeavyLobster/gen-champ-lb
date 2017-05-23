@@ -67,6 +67,10 @@ def add_users(userData, region, newUsers):
                 file=sys.stderr
             )
 
+    # Initialize an empty dict for the region if one doesn't exist yet
+    if region not in userData:
+        userData[region] = dict()
+
     # Iterate over fetched data, filling in information and defaults
     for userKey, userInfo in fetchedUserData.items():
         userData[region][userInfo.name.lower().replace(' ','')] = {
