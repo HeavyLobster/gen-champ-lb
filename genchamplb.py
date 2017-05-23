@@ -1,7 +1,7 @@
 #!/usr/bin/python
 """A CLI for libchampmastery"""
 
-__version__ = '0.0a1'
+__version__ = '0.0a2'
 __author__ = 'Heavy Lobster'
 
 import sys
@@ -13,7 +13,7 @@ import libchampmastery
 
 def _args_are_sane(arguments):
     """Ensures command line arguments are sane values."""
-    supportedCommands = [ 'gen', 'add', 'upd' ]
+    supportedCommands = [ 'gen', 'add', 'upd', 'del' ]
     supportedRegions = [
         'br', 'eune', 'euw', 'lan', 'las', 'na', 'oce', 'tr'
     ]
@@ -30,7 +30,10 @@ def _args_are_sane(arguments):
     champConfig.close()
 
     if arguments[2].lower() not in supportedCommands:
-        print('Available commands are ', file=sys.stderr)
+        print(
+            'Available commands are {0}'.format(supportedCommands),
+             file=sys.stderr
+        )
         return False
 
     if arguments[1] == 'add':
@@ -106,7 +109,10 @@ def main():
                 json.dump(userData, userDataFile, sort_keys=True, indent=4)
 
         elif sys.argv[2] == 'gen':
-            users = libchampmastery.sort_users(userData)
+            if len(sys.argv) == 3:
+                users = libchampmastery.sort_users(userData)
+            elif len(sys.argv) == 4:
+                users = libchampmastery.sort_users(userData, sys.argv[3])
 
             if outStyle == 'console':
                 print(format_as_reddit_table(users))
@@ -123,13 +129,29 @@ def main():
 
         elif sys.argv[2] == 'upd':
             if len(sys.argv) == 3:
-                userData = libchampmastery.update_all_users(userData, champId)
+                userData = libchampmastery.update_mastery(userData, champId)
 
-            elif len(sys.argv) > 3:
-                userData = libchampmastery.update_region(userData, sys.argv[3], champId)
+            elif len(sys.argv) == 4:
+                userData = libchampmastery.update_mastery(
+                    userData, champId, sys.argv[3]
+                )
 
-            elif len(sys.argv) > 4:
-                userData = libchampmastery.update_single_user(userData, sys.argv[3], sys.argv[4], champId)
+            elif len(sys.argv) == 5:
+                userData = libchampmastery.update_mastery(
+                        userData, champId, sys.argv[3], sys.argv[4]
+                )
+
+            else:
+                for username in sys.argv[4:]:
+                    userData = libchampmastery.update_mastery(
+                        userData, champId, sys.argv[3], username
+                    )
+
+            with open(userDataFilePath, 'w') as userDataFile:
+                json.dump(userData, userDataFile, sort_keys=True, indent=4)
+
+        elif sys.argv[2] == 'del':
+            userData = libchampmastery.del_users(userData, sys.argv[3], sys.argv[4:])
 
             with open(userDataFilePath, 'w') as userDataFile:
                 json.dump(userData, userDataFile, sort_keys=True, indent=4)
