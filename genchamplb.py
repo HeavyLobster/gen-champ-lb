@@ -1,7 +1,7 @@
 #!/usr/bin/python
 """A CLI for libchampmastery"""
 
-__version__ = '0.0a2'
+__version__ = '0.0a3'
 __author__ = 'Heavy Lobster'
 
 import sys
@@ -103,7 +103,7 @@ def main():
         libchampmastery.set_key(key)
 
         if sys.argv[2] == 'add':
-            userData = libchampmastery.add_users(userData, sys.argv[3], sys.argv[4:])
+            userData = libchampmastery.add_user(userData, sys.argv[3], sys.argv[4])
 
             with open(userDataFilePath, 'w') as userDataFile:
                 json.dump(userData, userDataFile, sort_keys=True, indent=4)
