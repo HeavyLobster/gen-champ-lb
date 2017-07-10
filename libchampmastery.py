@@ -1,158 +1,65 @@
 """A library for looking up champion mastery data."""
 
-__version__ = '0.0a3'
-__author__ = 'Heavy Lobster'
+__version__ = "0.0a3"
+__author__ = "Heavy Lobster"
 
 import sys
+import time
 
-import apiinterface
-
-
-def set_key(newKey):
-    """Set the key to use for the Riot API."""
-    apiinterface.key = newKey
+import requests
 
 
-def _check_key_exists():
-    """Make sure a key has been set."""
-    try:
-        if apiinterface.key:
-            return None
-    except AttributeError:
-        raise AttributeError('No key set, use libchampmastery.set_key(key)')
+regions = (
+        "br", "eune", "euw", "jp", "kr",  "lan",
+        "las", "na", "oce", "tr", "ru", "pbe"
+    )
 
 
-def add_user(userData, region, newUser):
-    """Fetch data for a user by username.
+def _parse_ratelimit(rawCallsMade):
+    """Parses the ratelimit string returned by the API.
 
     Args:
-        userData (dict): The user data to work with.
-        region (string): The region to work with.
-        newUser (string): The username to look up.
+        rawCallsMade (string): The "X-Rate-Limit-Count" field from
+            the header of responses from the API.
 
     Returns:
-        dict: The new users in a properly formatted dict.
+        int: The earliest time another API call may be made.
     """
-    _check_key_exists()
-
-    # Pre-process arguments
-    region = region.lower()
-    newUser = newUser.lower().replace(' ', '')
-
-    # Get user data
-    fetchedUserData = apiinterface.get_user(region, newUser)
-
-    # Initialize an empty dict for the region if one doesn't exist yet
-    if region not in userData:
-        userData[region] = dict()
-
-    # Fill in information and defaults
-    userData[region][fetchedUserData["name"].lower().replace(' ','')] = {
-        'id': fetchedUserData["id"],
-        'mastery': 0,
-        'name': fetchedUserData["name"],
+    # Key is the timeframe, value is the maximum number of requests
+    # possible in that timeframe.
+    limits = {
+        "1": 20,
+        "120": 100,
     }
 
-    return userData
+    callsMade = rawCallsMade.split(",")
+
+    # For each pair of values from the API
+    for x in range(len(callsMade)):
+        # Separate number of calls made from timeframe
+        # Index 0: calls made, index 1: timeframe
+        callsMade[x] = callsMade[x].split(":")
+        callsMade[x][0] = int(callsMade[x][0])
+
+    for item in callsMade:
+        calls = item[0]
+        timeframe = item[1]
+
+        # If fewer than 4 requests in the timeframe remain,
+        # wait 1/4 of the timeframe
+        if calls >= (limits[timeframe] - 4):
+            waitUntil = time.time() + (int(timeframe) / 4) + 1
+
+            return waitUntil
+
+    return 0
 
 
-def del_users(userData, region, rmUsers):
-    """Remove user data by usernames."""
-    region = region.lower()
-
-    # Pre-process names
-    for username in rmUsers:
-        rmUsers[rmUsers.index(username)] = username.lower().replace(' ','')
-
-    # Iterate over usernames
-    for username in rmUsers:
-        try:
-            del userData[region][username]
-        except KeyError:
-            print(
-                'Could not find {0} to be deleted'.format(username),
-                file=sys.stderr
-            )
-
-    return userData
-
-
-def _fetch_mastery(champId, region, userId):
-    """Fetch a user's mastery score, retrying if it fails."""
-    _check_key_exists()
-
-    mastery = -1
-
-    failedAttempts = 0
-    while mastery == -1:
-        try:
-            mastery = apiinterface.get_mastery(
-                region,
-                champId,
-                userId
-            )['championPoints']
-        except Exception:
-            if failedAttempts < 3:
-                print(
-                    (f'Unable to get data for {userInfo["name"]}, '
-                      'trying {3 - failedAttempts} more times...'),
-                    file=sys.stderr
-                )
-                failedAttempts += 1
-            else:
-                raise LookupError(f'Unable to get data for '
-                                   '{userInfo["name"]} in '
-                                   '{region.upper()}')
-
-    return mastery
-
-
-def update_mastery(userData, champId, region=None, username=None):
-    """Update mastery scores.
-
-    Args:
-        userData (dict): The user data to work with.
-        champId (int): ID for the champion to get scores for.
-        region (string, optional): The region to limit updates to.
-            Required if username is supplied.
-        username (string, optional): The specific user to update.
-
-    Returns:
-        dict: The original dict with updated mastery scores.
-    """
-    # Pre-process parameters
-    if username != None:
-        username = username.lower().replace(' ', '')
-        # Make sure region is set
-        if region == None:
-            raise TypeError('update_mastery(): username set without region')
-    if region != None:
-        region = region.lower()
-
-    # Case switcher for different parameters
-    if username != None:
-        userData[region][username]['mastery'] = _fetch_mastery(
-            champId, region, userData[region][username]['id']
-        )
-
-    elif region != None:
-        for username, userInfo in userData[region].items():
-            userInfo['mastery'] = _fetch_mastery(champId , region, userInfo['id'])
-
-    else:
-        for region in userData:
-            for username, userInfo in userData[region].items():
-                userInfo['mastery'] = _fetch_mastery(champId , region, userInfo['id'])
-
-    return userData
-
-
-def sort_users(userData, region=None):
+def sort(userData):
     """Sorts the users from a dict into an ordered list.
 
     Args:
         userData (dict): The user data to work with.
-        region (string): The region for which to return users.
 
     Returns:
         list<dict>: The user data sorted into a list of dict objects.
@@ -160,36 +67,144 @@ def sort_users(userData, region=None):
     users = []
 
     # Populate list of users
-    # If no region is specified, return users from all regions
-    if region == None:
-        # Iterate over regions
-        for region, regionUsers in userData.items():
-            # Iterate over users in the region
-            for username, userInfo in regionUsers.items():
-                userDict = {
-                    'id': userInfo['id'],
-                    'region': region,
-                    'name': userInfo['name'],
-                    'mastery': userInfo['mastery'],
-                }
-                users.append(userDict)
-
-    # Else, return the users from just the specified region
-    else:
-        for username, userInfo in userData[region.lower()].items():
-            userDict = {
-                'id': userInfo['id'],
-                'region': region,
-                'name': userInfo['name'],
-                'mastery': userInfo['mastery'],
-            }
-            users.append(userDict)
+    for username, userInfo in userData.items():
+        users.append(userInfo)
 
     # Sort list
     users = sorted(
         users,
-        key=lambda user: int(user['mastery']),
+        key=lambda user: int(user["mastery"]),
         reverse=True
     )
 
     return users
+
+
+class ApiInterface():
+    """A class for managing keys and ratelimits."""
+
+    _endpoints = {
+        "br": "br1",
+        "eune": "eun1",
+        "euw": "euw1",
+        "jp": "jp1",
+        "kr": "kr",
+        "lan": "la1",
+        "las": "la2",
+        "na": "na1",
+        "oce": "oc1",
+        "tr": "tr1",
+        "ru": "ru",
+        "pbe": "pbe1",
+    }
+
+    def __init__(self, key):
+        """Sets the key and initializes the ratelimit timers.
+
+        Args:
+            key (string): The Riot API key.
+        """
+        self.key = key
+        self.waitUntil = {
+            "br": 0,
+            "eune": 0,
+            "euw": 0,
+            "jp": 0,
+            "kr": 0,
+            "lan": 0,
+            "las": 0,
+            "na": 0,
+            "oce": 0,
+            "tr": 0,
+            "ru": 0,
+            "pbe": 0,
+        }
+
+
+    def user(self, region, username):
+        """Fetches user info from the API.
+
+        Args:
+            region (string): The region to look in.
+            username (string): The user to look for.
+        """
+        # Pre-process arguments
+        region = region.lower()
+        username = username.lower().replace(" ", "")
+
+        # Check ratelimit
+        if time.time() < self.waitUntil[region]:
+            waitTime = self.waitUntil[region] - time.time()
+            print(
+                f"Waiting {int(waitTime)} seconds "
+                "because of ratelimits",
+                file=sys.stderr
+            )
+            time.sleep(waitTime)
+
+        # Make request to the API
+        endpoint = ApiInterface._endpoints[region]
+        authHeader = {"x-riot-token": self.key}
+        response = requests.get(
+            f"https://{endpoint}.api.riotgames.com/lol"
+            f"/summoner/v3/summoners/by-name/{username}",
+            headers=authHeader
+        )
+        apiData = response.json()
+
+        # Map relevant information to a dict
+        userInfo = {
+            "id": apiData["id"],
+            "region": region,
+            "name": apiData["name"],
+            "mastery": 0,
+        }
+
+        # Set ratelimit
+        self.waitUntil[region] = _parse_ratelimit(
+            response.headers["x-rate-limit-count"]
+        )
+
+        return userInfo
+
+
+    def mastery(self, region, champId, userId):
+        """Fetches a user's mastery score for a champion.
+
+        Args:
+            region (string): The region to use.
+            champId (int): The ID of the champion.
+            userId (int): The ID of the user.
+
+        Returns:
+            int: The user's mastery score on the champion.
+        """
+        # Pre-process arguments
+        region = region.lower()
+
+        # Check ratelimit
+        if time.time() < self.waitUntil[region]:
+            waitTime = self.waitUntil[region] - time.time()
+            print(
+                f"Waiting {int(waitTime)} seconds "
+                "because of ratelimits",
+                file=sys.stderr
+            )
+            time.sleep(waitTime)
+
+        # Make request to the API
+        endpoint = ApiInterface._endpoints[region]
+        authHeader = {"x-riot-token": self.key}
+        response = requests.get(
+            f"https://{endpoint}.api.riotgames.com/championmastery"
+            f"/location/{endpoint}/player/{userId}/champion/{champId}",
+            headers=authHeader
+        )
+        masteryPoints = response.json()["championPoints"]
+
+        # Set ratelimit
+        self.waitUntil[region] = _parse_ratelimit(
+            response.headers["x-rate-limit-count"]
+        )
+
+        return masteryPoints
