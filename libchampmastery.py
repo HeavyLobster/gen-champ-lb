@@ -171,7 +171,7 @@ class ApiInterface():
 
         # Set ratelimit
         self.waitUntil[region] = _parse_ratelimit(
-            response.headers["x-rate-limit-count"]
+            response.headers["x-app-rate-limit-count"]
         )
 
         return userInfo
@@ -214,7 +214,7 @@ class ApiInterface():
 
         # Set ratelimit
         self.waitUntil[region] = _parse_ratelimit(
-            response.headers["x-rate-limit-count"]
+            response.headers["x-app-rate-limit-count"]
         )
 
         return masteryPoints
