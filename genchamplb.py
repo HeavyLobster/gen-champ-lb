@@ -103,7 +103,7 @@ def main():
 
     key = config["Authentication"]["RiotKey"]
 
-    champId = config["Leaderboard"]["ChampionID"]
+    champId = int(config["Leaderboard"]["ChampionID"])
     outStyle = config["Leaderboard"]["Output"]
 
     userDataFilePath = config["Files"]["UserData"]
@@ -115,7 +115,7 @@ def main():
     if sys.argv[2] == "add":
         api = libchampmastery.ApiInterface(key)
         for username in sys.argv[4:]:
-            userInfo = api.user(sys.argv[3], username)
+            userInfo = api.user(sys.argv[3], username, champId)
             nameKey = userInfo["name"].lower().replace(" ", "")
             userData[nameKey] = userInfo
         with open(userDataFilePath, "w") as userDataFile:

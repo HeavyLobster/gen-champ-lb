@@ -121,7 +121,7 @@ class ApiInterface():
         }
 
 
-    def user(self, region, username):
+    def user(self, region, username, champId=-1):
         """Fetches user info from the API.
 
         Args:
@@ -152,12 +152,21 @@ class ApiInterface():
         )
         apiData = response.json()
 
+        # Fetch mastery score if requested
+        if champId > -1:
+            masteryPoints = self.mastery(
+                region, champId, apiData["id"]
+            )
+        # Skip if not
+        else:
+            masteryPoints = 0
+
         # Map relevant information to a dict
         userInfo = {
             "id": apiData["id"],
             "region": region,
             "name": apiData["name"],
-            "mastery": 0,
+            "mastery": masteryPoints,
         }
 
         # Set ratelimit
@@ -196,8 +205,9 @@ class ApiInterface():
         endpoint = ApiInterface._endpoints[region]
         authHeader = {"x-riot-token": self.key}
         response = requests.get(
-            f"https://{endpoint}.api.riotgames.com/championmastery"
-            f"/location/{endpoint}/player/{userId}/champion/{champId}",
+            f"https://{endpoint}.api.riotgames.com/lol"
+            f"/champion-mastery/v3/champion-masteries"
+            f"/by-summoner/{userId}/by-champion/{champId}",
             headers=authHeader
         )
         masteryPoints = response.json()["championPoints"]
