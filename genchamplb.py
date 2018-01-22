@@ -8,6 +8,7 @@ import sys
 import time
 import configparser
 import json
+from pathlib import Path
 
 import libchampmastery
 
@@ -15,27 +16,24 @@ import libchampmastery
 def _args_are_sane(arguments):
     """Ensures command line arguments are sane values."""
     commands = ("gen", "add", "upd", "del")
-    champConfigFile = f"data/{arguments[1]}.ini"
+    config_path = Path("data/{arguments[1]}.ini")
 
-    try:
-        champConfig = open(champConfigFile)
-    except FileNotFoundError:
+    if not config_path.is_file():
         print(
             f"Could not find an ini file for {arguments[1]}",
             file=sys.stderr
         )
         return False
-    champConfig.close()
 
     if arguments[2].lower() not in commands:
         print(
-            "Available commands are {commands}",
-             file=sys.stderr
+            f"Available commands are {commands}",
+            file=sys.stderr
         )
         return False
 
     if arguments[2] == "add":
-        if arguments[3].lower() not in libchampmastery.regions:
+        if arguments[3].lower() not in libchampmastery.REGIONS:
             print(
                 f"{arguments[3]} is not a supported region",
                 file=sys.stderr

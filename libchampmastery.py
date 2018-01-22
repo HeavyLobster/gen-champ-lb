@@ -9,10 +9,10 @@ import time
 import requests
 
 
-regions = (
-        "br", "eune", "euw", "jp", "kr",  "lan",
-        "las", "na", "oce", "tr", "ru", "pbe"
-    )
+REGIONS = (
+    "br", "eune", "euw", "jp", "kr", "lan",
+    "las", "na", "oce", "tr", "ru", "pbe"
+)
 
 
 def _parse_ratelimit(rawCallsMade):
@@ -67,7 +67,7 @@ def sort(userData):
     users = []
 
     # Populate list of users
-    for username, userInfo in userData.items():
+    for _, userInfo in userData.items():
         users.append(userInfo)
 
     # Sort list
